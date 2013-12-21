@@ -33,12 +33,18 @@ function WarpGui:__init()
 	-- Player list
 	self.playerList = SortedList.Create(playersPage)
 	self.playerList:SetDock(GwenPosition.Fill)
-	self.playerList:SetMargin(Vector2(0, 0), Vector2(0, 0))
+	self.playerList:SetMargin(Vector2(0, 0), Vector2(0, 4))
 	self.playerList:AddColumn("Name")
 	self.playerList:AddColumn("Warp To", 90)
 	self.playerList:AddColumn("Accept Warp", 90)
 	self.playerList:AddColumn("Whitelist", 90)
 	self.playerList:SetButtonsVisible(true)
+	
+	-- Player search box
+	self.filter = TextBox.Create(playersPage)
+	self.filter:SetDock(GwenPosition.Bottom)
+	self.filter:SetSize(Vector2(self.window:GetSize().x, 32))
+	self.filter:Subscribe("TextChanged", self, self.TextChanged)
 	
 	-- Whitelist all
 	local whitelistAllCheckbox = LabeledCheckBox.Create(playersPage)
@@ -95,7 +101,8 @@ function WarpGui:CreateListButton(text, enabled)
 end
 
 function WarpGui:AddPlayer(player)
-	local playerId = tostring(player:GetId());
+	local playerId = tostring(player:GetId())
+	local playerName = player:GetName()
 	
 	-- Warp to button
 	local warpToButtonBase, warpToButton = self:CreateListButton("Warp to", true)
@@ -112,12 +119,37 @@ function WarpGui:AddPlayer(player)
 	
 	-- List item
 	local item = self.playerList:AddItem(playerId)
-	item:SetCellText(0, player:GetName())
+	item:SetCellText(0, playerName)
 	item:SetCellContents(1, warpToButtonBase)
 	item:SetCellContents(2, acceptButtonBase)
 	item:SetCellContents(3, whitelistButton)
 	
 	self.rows[playerId] = item
+	
+	-- Add is serch filter matches
+	local filter = self.filter:GetText():lower()
+	if filter:len() > 0 then
+		item:SetVisible(true)
+	end
+end
+
+-- ========================= Player search =========================
+function WarpGui:TextChanged()
+	local filter = self.filter:GetText()
+
+	if filter:len() > 0 then
+		for k, v in pairs(self.rows) do
+			v:SetVisible(self:PlayerNameContains(v:GetCellText(0), filter))
+		end
+	else
+		for k, v in pairs(self.rows) do
+			v:SetVisible(true)
+		end
+	end
+end
+
+function WarpGui:PlayerNameContains(name, filter)
+	return string.match(name:lower(), filter:lower()) ~= nil
 end
 
 -- ========================= Warp to/Warp accept =========================
@@ -168,8 +200,6 @@ function WarpGui:WarpRequest(args)
 	local requestingPlayer = args
 	local playerId = tostring(requestingPlayer:GetId())
 	local whitelist = self.whitelist[playerId]
-	
-	if whitelist == false then return end
 	
 	if whitelist == true or self.whitelistAll or self:IsAdmin(requestingPlayer) then -- In whitelist
 		Network:Send("WarpTo", {requestingPlayer, LocalPlayer})
