@@ -1,27 +1,67 @@
-local textColor = Color(200, 50, 200)
+class 'WarpGui'
 
-Network:Subscribe("WarpRequestToServer", function(args)
-	local requestingPlayer = args[1]
-	local targetPlayer = args[2]
+function WarpGui:__init()
+	-- Local variables
+	self.textColor = Color(200, 50, 200)
+	self.storeInSql = true
 	
-	Network:Send(targetPlayer, "WarpRequestToTarget", requestingPlayer)
-end)
+	-- Set up SQL
+	if self.storeInSql then self:InitializeDatabase() end
+	
+	-- Events
+	Network:Subscribe("WarpRequestToServer", self, self.WarpRequestToServer)
+	Network:Subscribe("WarpMessageTo", self, self.WarpMessageTo)
+	Network:Subscribe("WarpTo", self, self.WarpTo)
+	Network:Subscribe("WarpSetWhitelist", self, self.WarpSetWhitelist)
+	Network:Subscribe("WarpGetWhitelists", self, self.WarpGetWhitelists)
+end
 
-Network:Subscribe("WarpMessageTo", function(args)
-	local player = args[1]
-	local message = args[2]
-	
-	Chat:Send(player, message, textColor)
-end)
+-- ========================= Network request to target player =========================
+function WarpGui:WarpRequestToServer(args)
+	Network:Send(args.target, "WarpRequestToTarget", args.requester)
+end
 
-Network:Subscribe("WarpTo", function(args)
-	local requester = args[1]
-	local target = args[2]
+-- ========================= Send message to target player =========================
+function WarpGui:WarpMessageTo(args)
+	Chat:Send(args.target, args.message, self.textColor)
+end
+
+-- ========================= Warp requester to target =========================
+function WarpGui:WarpTo(args)
+	Chat:Send(args.target, args.requester:GetName() .. " has warped to you.", self.textColor)
+	Chat:Send(args.requester, "You have warped to " .. args.target:GetName() .. ".", self.textColor)
 	
-	Chat:Send(target, requester:GetName() .. " has warped to you.", textColor)
-	Chat:Send(requester, "You have warped to " .. target:GetName() .. ".", textColor)
-	
-	local vector = target:GetPosition()
+	local vector = args.target:GetPosition()
 	vector.x = vector.x + 2
-	requester:SetPosition(vector)
-end)
+	args.requester:SetPosition(vector)
+end
+
+-- ========================= Whitelist storing =========================
+function WarpGui:InitializeDatabase() -- Create table if it doesn't exist
+	--SQL:Execute("DROP TABLE IF EXISTS warp_whitelists")
+	SQL:Execute("CREATE TABLE IF NOT EXISTS warp_whitelists (player_steam_id INT(20) NOT NULL, target_steam_id INT(20) NOT NULL, whitelist INT(1) NOT NULL DEFAULT 0, PRIMARY KEY (player_steam_id, target_steam_id))")
+end
+
+function WarpGui:WarpSetWhitelist(args)
+	if not self.storeInSql then return end
+	
+	if args.whitelist == 0 then -- Remove from database
+		SQL:Execute("DELETE FROM warp_whitelists WHERE player_steam_id = " .. args.playerSteamId .. " AND target_steam_id = " .. args.targetSteamId)
+	else -- Update whitelist
+		SQL:Execute("INSERT OR REPLACE INTO warp_whitelists (player_steam_id, target_steam_id, whitelist) VALUES (" .. args.playerSteamId .. ", " .. args.targetSteamId .. ", " .. args.whitelist .. ")")
+	end
+end
+
+function WarpGui:WarpGetWhitelists(player)
+	if not self.storeInSql or player == nil then return end
+	
+	local playerSteamId = player:GetSteamId().id
+
+	local query = SQL:Query("SELECT target_steam_id, whitelist FROM warp_whitelists WHERE player_steam_id = " .. playerSteamId .. " AND whitelist != 0")
+	local results = query:Execute()
+	
+	Network:Send(player, "WarpReturnWhitelists", results)
+end
+
+-- ========================= Initialize class =========================
+local warpGui = WarpGui()
