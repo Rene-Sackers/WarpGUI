@@ -154,6 +154,7 @@ end
 
 -- ========================= Warp to/Warp accept =========================
 function WarpGui:WarpToPlayerClick(player)
+	self.filter:SetText("")
 	Network:Send("WarpRequestToServer", {LocalPlayer, player})
 	self:SetWindowVisible(false)
 end
