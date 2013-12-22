@@ -13,7 +13,7 @@ function WarpGui:__init()
 	self.windowShown = false
 	
 	-- Admins
-	self:AddAdmin("STEAM_0:0:16870054x")
+	self:AddAdmin("STEAM_0:0:16870054")
 	
 	-- Create GUI
 	self.window = Window.Create()
@@ -120,7 +120,14 @@ function WarpGui:AddPlayer(player)
 	self.acceptButtons[playerId] = acceptButton
 	
 	-- Whitelist
-	local whitelistButtonBase, whitelistButton = self:CreateListButton("None", true)
+	local whitelist = self.whitelist[playerId]
+	local whitelistButtonText = "None"
+	if whitelist ~= nil then
+		if whitelist == 1 then whitelistButtonText = "Whitelisted"
+		elseif whitelist == 2 then whitelistButtonText = "Blacklisted"
+		end
+	end
+	local whitelistButtonBase, whitelistButton = self:CreateListButton(whitelistButtonText, true)
 	whitelistButton:Subscribe("Press", function() self:WhitelistClick(playerId, whitelistButton) end)
 	self.whitelistButtons[playerId] = whitelistButton
 	
@@ -215,6 +222,8 @@ function WarpGui:WhitelistClick(playerId, button)
 end
 
 function WarpGui:SetWhitelist(playerId, whitelisted, sendToServer)
+	if self.whitelist[playerId] ~= whitelisted then self.whitelist[playerId] = whitelisted end
+	
 	local whitelistButton = self.whitelistButtons[playerId]
 	if whitelistButton == nil then return end
 	
@@ -225,8 +234,6 @@ function WarpGui:SetWhitelist(playerId, whitelisted, sendToServer)
 	elseif whitelisted == 2 then -- blacklist
 		whitelistButton:SetText("Blacklisted")
 	end
-
-	if self.whitelist[playerId] ~= whitelisted then self.whitelist[playerId] = whitelisted end
 	
 	if sendToServer then
 		Network:Send("WarpSetWhitelist", {playerSteamId = LocalPlayer:GetSteamId().id, targetSteamId = playerId, whitelist = whitelisted})
@@ -236,20 +243,35 @@ end
 function WarpGui:WarpReturnWhitelists(whitelists)
 	for i = 1, #whitelists do
 		local targetSteamId = whitelists[i].target_steam_id
-		local whitelistButton = self.whitelistButtons[targetSteamId]
-		
-		if whitelistButton != nil then -- Button exists
-			local whitelisted = whitelists[i].whitelist
-			self:SetWhitelist(targetSteamId, tonumber(whitelisted), false)
-		end
+		local whitelisted = whitelists[i].whitelist
+		self:SetWhitelist(targetSteamId, tonumber(whitelisted), false)
 	end
 end
 
 -- ========================= Chat command =========================
 function WarpGui:LocalPlayerChat(args)
-	if args.text ~= "/warp" then return true end
+	local message = args.text
 	
-	self:SetWindowVisible(not self.windowShown)
+	local commands = {}
+	for command in string.gmatch(message, "[^%s]+") do
+		table.insert(commands, command)
+	end
+	
+	if commands[1] ~= "/warp" then return true end
+	
+	if #commands == 1 then -- No extra commands, show window and return
+		self:SetWindowVisible(not self.windowShown)
+		return false
+	end
+	
+	local warpNameSearch = table.concat(commands, " ", 2)
+	
+	for player in Client:GetPlayers() do
+		if (self:PlayerNameContains(player:GetName(), warpNameSearch)) then
+			self:WarpToPlayerClick(player)
+			return false
+		end
+	end
 	
 	return false
 end
