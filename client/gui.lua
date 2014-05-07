@@ -20,12 +20,13 @@ function WarpGui:__init()
 	self.window:SetVisible(self.windowShown)
 	self.window:SetTitle("Warp GUI")
 	self.window:SetSizeRel(Vector2(0.4, 0.7))
+	self.window:SetMinimumSize(Vector2(400, 200))
 	self.window:SetPositionRel( Vector2(0.75, 0.5) - self.window:GetSizeRel()/2)
     self.window:Subscribe("WindowClosed", self, function (args) self:SetWindowVisible(false) end)
 	
 	-- Tabs
 	local tabControl = TabControl.Create(self.window)
-	tabControl:SetDock(GwenPosition.Left)
+	tabControl:SetDock(GwenPosition.Fill)
 	tabControl:SetSizeRel(Vector2(0.98, 1))
 	
 	-- Pages
@@ -60,6 +61,7 @@ function WarpGui:__init()
 	for player in Client:GetPlayers() do
 		self:AddPlayer(player)
 	end
+	--self:AddPlayer(LocalPlayer)
 	
 	-- Subscribe to events
 	Events:Subscribe("LocalPlayerChat", self, self.LocalPlayerChat)
@@ -69,6 +71,7 @@ function WarpGui:__init()
     Events:Subscribe("KeyUp", self, self.KeyUp)
 	Network:Subscribe("WarpRequestToTarget", self, self.WarpRequest)
 	Network:Subscribe("WarpReturnWhitelists", self, self.WarpReturnWhitelists)
+	Network:Subscribe("WarpDoPoof", self, self.WarpDoPoof)
 	
 	-- Load whitelists from server
 	Network:Send("WarpGetWhitelists", LocalPlayer)
@@ -88,34 +91,32 @@ function WarpGui:IsAdmin(player)
 end
 
 -- ========================= Player adding =========================
-function WarpGui:CreateListButton(text, enabled)
-	local buttonBase = BaseWindow.Create(self.window)
-	buttonBase:SetDock(GwenPosition.Fill)
-	buttonBase:SetSize(Vector2(1, 23))
-	
-    local buttonBackground = Rectangle.Create(buttonBase)
+function WarpGui:CreateListButton(text, enabled, listItem)
+    local buttonBackground = Rectangle.Create(listItem)
     buttonBackground:SetSizeRel(Vector2(0.5, 1.0))
     buttonBackground:SetDock(GwenPosition.Fill)
     buttonBackground:SetColor(Color(0, 0, 0, 100))
 	
-	local button = Button.Create(buttonBase)
+	local button = Button.Create(listItem)
 	button:SetText(text)
 	button:SetDock(GwenPosition.Fill)
 	button:SetEnabled(enabled)
 	
-	return buttonBase, button
+	return button
 end
 
 function WarpGui:AddPlayer(player)
 	local playerId = tostring(player:GetSteamId().id)
 	local playerName = player:GetName()
 	
+	local item = self.playerList:AddItem(playerId)
+	
 	-- Warp to button
-	local warpToButtonBase, warpToButton = self:CreateListButton("Warp to", true)
+	local warpToButton = self:CreateListButton("Warp to", true, item)
 	warpToButton:Subscribe("Press", function() self:WarpToPlayerClick(player) end)
 	
 	-- Accept 
-	local acceptButtonBase, acceptButton = self:CreateListButton("Accept", false)
+	local acceptButton = self:CreateListButton("Accept", false, item)
 	acceptButton:Subscribe("Press", function() self:AcceptWarpClick(player) end)
 	self.acceptButtons[playerId] = acceptButton
 	
@@ -127,15 +128,14 @@ function WarpGui:AddPlayer(player)
 		elseif whitelist == 2 then whitelistButtonText = "Blacklisted"
 		end
 	end
-	local whitelistButtonBase, whitelistButton = self:CreateListButton(whitelistButtonText, true)
+	local whitelistButton = self:CreateListButton(whitelistButtonText, true, item)
 	whitelistButton:Subscribe("Press", function() self:WhitelistClick(playerId, whitelistButton) end)
 	self.whitelistButtons[playerId] = whitelistButton
 	
 	-- List item
-	local item = self.playerList:AddItem(playerId)
 	item:SetCellText(0, playerName)
-	item:SetCellContents(1, warpToButtonBase)
-	item:SetCellContents(2, acceptButtonBase)
+	item:SetCellContents(1, warpToButton)
+	item:SetCellContents(2, acceptButton)
 	item:SetCellContents(3, whitelistButton)
 	
 	self.rows[playerId] = item
@@ -274,6 +274,12 @@ function WarpGui:LocalPlayerChat(args)
 	end
 	
 	return false
+end
+
+-- ========================= Effect =========================
+function WarpGui:WarpDoPoof(position)
+	Console:Print("asd")
+    ClientEffect.Play(AssetLocation.Game, {effect_id = 250, position = position, angle = Angle()})
 end
 
 -- ========================= Window management =========================

@@ -31,9 +31,15 @@ function WarpGui:WarpTo(args)
 	Chat:Send(args.target, args.requester:GetName() .. " has warped to you.", self.textColor)
 	Chat:Send(args.requester, "You have warped to " .. args.target:GetName() .. ".", self.textColor)
 	
+	-- Poof
+	Network:SendNearby(args.requester, "WarpDoPoof", args.requester:GetPosition())
+	
 	local vector = args.target:GetPosition()
 	vector.x = vector.x + 2
 	args.requester:SetPosition(vector)
+	
+	Network:SendNearby(args.target, "WarpDoPoof", vector)
+	Network:Send(args.requester, "WarpDoPoof", args.requester:GetPosition())
 end
 
 -- ========================= Whitelist storing =========================
